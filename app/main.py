@@ -1,11 +1,13 @@
-from fastapi import FastAPI, Depends, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Depends
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 import pdfplumber
 import tempfile
 import re
-from app import models, schemas
+from datetime import datetime
+
 from app.database import engine, SessionLocal
-from datetime import date
+from app import models
 
 app = FastAPI()
 
@@ -20,22 +22,27 @@ def get_db():
         db.close()
 
 
-@app.get("/")
-def home():
-    return {"status": "you did it, it's working bro"}
 
+def extract_items_from_pdf(file: UploadFile):
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        content = file.file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
 
-def parse_invoice_text(text: str):
+    extracted_text = ""
+    with pdfplumber.open(tmp_path) as pdf:
+        for page in pdf.pages:
+            text = page.extract_text()
+            if text:
+                extracted_text += text + "\n"
+
     items = []
-    lines = text.splitlines()
-
     skip_keywords = ["gst", "invoice", "date", "total", "thank"]
 
-    for line in lines:
-        lower_line = line.lower()
+    for line in extracted_text.splitlines():
+        lower = line.lower()
 
-        # Skip obvious non-item lines
-        if any(keyword in lower_line for keyword in skip_keywords):
+        if any(k in lower for k in skip_keywords):
             continue
 
         numbers = re.findall(r"\d+\.?\d*", line)
@@ -44,8 +51,7 @@ def parse_invoice_text(text: str):
             qty = int(float(numbers[0]))
             price = float(numbers[1])
 
-           
-            if qty > 100:
+            if qty > 100:  
                 continue
 
             name = re.sub(r"\d+\.?\d*", "", line).strip()
@@ -59,50 +65,91 @@ def parse_invoice_text(text: str):
 
     return items
 
-@app.post("/upload-pdf")
-async def upload_pdf(
+
+
+@app.get("/")
+def home():
+    return {"status": "Expense & Profit Analyser running 🚀"}
+
+
+
+@app.post("/upload-purchase-bill")
+async def upload_purchase_bill(
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
-    if not file.filename.endswith(".pdf"):
-        return {"error": "Only PDF files are supported"}
-
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-        content = await file.read()
-        tmp.write(content)
-        tmp_path = tmp.name
-
-    extracted_text = ""
-    with pdfplumber.open(tmp_path) as pdf:
-        for page in pdf.pages:
-            page_text = page.extract_text()
-            if page_text:
-                extracted_text += page_text + "\n"
-
-    parsed_items = parse_invoice_text(extracted_text)
-
-    # 🔑 CREATE INVOICE IN DB
-    db_invoice = models.Invoice(
-        invoice_type="purchase",
-        date=date.today()
-    )
-    db.add(db_invoice)
+   
+    db.query(models.PurchaseItem).delete()
     db.commit()
-    db.refresh(db_invoice)
 
-    for item in parsed_items:
-        db_item = models.InvoiceItem(
-            name=item["name"],
-            quantity=item["quantity"],
-            price=item["price"],
-            invoice_id=db_invoice.id
-        )
-        db.add(db_item)
+    items = extract_items_from_pdf(file)
+
+    for item in items:
+        db.add(models.PurchaseItem(**item))
 
     db.commit()
 
     return {
-        "message": "Invoice created from PDF",
-        "invoice_id": db_invoice.id,
-        "items_saved": len(parsed_items)
+        "message": "Purchase bill uploaded",
+        "items_added": len(items)
     }
+
+
+@app.post("/upload-sales-bill")
+async def upload_sales_bill(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+
+    db.query(models.SaleItem).delete()
+    db.commit()
+
+    items = extract_items_from_pdf(file)
+
+    for item in items:
+        db.add(models.SaleItem(**item))
+
+    db.commit()
+
+    return {
+        "message": "Sales bill uploaded",
+        "items_added": len(items)
+    }
+
+
+
+@app.post("/calculate-profit")
+def calculate_profit(db: Session = Depends(get_db)):
+    total_purchase = db.query(
+        func.sum(models.PurchaseItem.quantity * models.PurchaseItem.price)
+    ).scalar() or 0
+
+    total_sales = db.query(
+        func.sum(models.SaleItem.quantity * models.SaleItem.price)
+    ).scalar() or 0
+
+    profit = total_sales - total_purchase
+
+    history = models.ProfitHistory(
+        total_purchase=total_purchase,
+        total_sales=total_sales,
+        profit=profit,
+        created_at=datetime.utcnow()
+    )
+
+    db.add(history)
+    db.commit()
+
+    return {
+        "total_purchase": total_purchase,
+        "total_sales": total_sales,
+        "profit": profit
+    }
+
+
+
+@app.get("/profit-history")
+def profit_history(db: Session = Depends(get_db)):
+    return db.query(models.ProfitHistory).order_by(
+        models.ProfitHistory.created_at.desc()
+    ).all()

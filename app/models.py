@@ -1,24 +1,31 @@
-from sqlalchemy import Column, Integer, String, Float, Date, ForeignKey
-from sqlalchemy.orm import relationship
-from .database import Base
-
-class Invoice(Base):
-    __tablename__ = "invoices"
-
-    id = Column(Integer, primary_key=True, index=True)
-    invoice_type = Column(String)  # purchase or sale
-    date = Column(Date)
-
-    items = relationship("InvoiceItem", back_populates="invoice")
+from sqlalchemy import Column, Integer, Float, String, DateTime
+from sqlalchemy.sql import func
+from app.database import Base
 
 
-class InvoiceItem(Base):
-    __tablename__ = "invoice_items"
+class PurchaseItem(Base):
+    __tablename__ = "purchase_items"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     name = Column(String)
     quantity = Column(Integer)
     price = Column(Float)
 
-    invoice_id = Column(Integer, ForeignKey("invoices.id"))
-    invoice = relationship("Invoice", back_populates="items")
+
+class SaleItem(Base):
+    __tablename__ = "sale_items"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    quantity = Column(Integer)
+    price = Column(Float)
+
+
+class ProfitHistory(Base):
+    __tablename__ = "profit_history"
+
+    id = Column(Integer, primary_key=True)
+    total_purchase = Column(Float)
+    total_sales = Column(Float)
+    profit = Column(Float)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
