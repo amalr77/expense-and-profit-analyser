@@ -1,4 +1,4 @@
-Expense and Profit Analyser
+Expense and Profit Analyser (expenso.ai)
 
 A simple web application to analyse expenses and sales data and calculate profit or loss.
 This project focuses on basic financial analysis with a clean and easy-to-use interface.
