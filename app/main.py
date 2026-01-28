@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 
 from .database import engine, SessionLocal
-from .cd import models
+from . import models
 
 app = FastAPI()
 
