@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, Float, String, DateTime
 from sqlalchemy.sql import func
-from app.database import Base
+from app.backend.database import Base
 
 
 class PurchaseItem(Base):

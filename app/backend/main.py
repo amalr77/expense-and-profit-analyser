@@ -9,8 +9,8 @@ from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
 
 
-from app.database import engine, SessionLocal
-from app import models
+from app.backend.database import engine, SessionLocal
+from app.backend import models
 
 app = FastAPI()
 
