@@ -6,10 +6,21 @@ import tempfile
 import re
 from datetime import datetime
 
+from fastapi.middleware.cors import CORSMiddleware
+
+
 from app.database import engine, SessionLocal
 from app import models
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -20,6 +31,9 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+
 
 
 def extract_items_from_pdf(file: UploadFile):
