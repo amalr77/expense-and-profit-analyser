@@ -28,3 +28,5 @@ Purpose
 - This project was built to improve full-stack development skills and to understand real-world
 data flow between frontend and backend.
 
+
+october 14-let it be the new beginning
